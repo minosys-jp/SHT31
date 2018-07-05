@@ -1,0 +1,240 @@
+<html>
+<head>
+<meta http-equiv="Cache-control" content="no-cache">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Refresh" content="300">
+<title>Temperature/Humidity tracking data</title>
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script type="text/javascript">
+var room_hash = new Object();
+var current_room = '60';
+var current_offset = 0;
+var current_length = 0;
+var current_interval = "minute";
+// Set your Internet Server URL
+var hostname = "<your server URL>";
+room_name('http://' + hostname + '/retrievedb.php?type=ROOM');
+
+google.load("visualization", "1", {packages:["corechart"]});
+google.setOnLoadCallback(drawChart);
+
+function drawChart() {
+  var threshold = load_threshold(current_room);
+  var url;
+  var year = document.startday.year.value;
+  var month = document.startday.month.value;
+  var day = document.startday.day.value;
+  var hour = document.startday.hour.value;
+  var minutes = document.startday.minutes.value;
+  if (!hour) hour = 0;
+  if (!minutes) minutes = 0;
+
+  if (year && month && day) {
+    url = "http://" + hostname + "/retrievedb.php?type=TRACK&room=" + current_room + "&mode=" + current_interval+ "&year=" + year + "&month=" + month + "&day=" + day + "&hour=" + hour + "&minutes=" + minutes;
+  } else {
+    url = "http://" + hostname + "/retrievedb.php?type=TRACK&room=" + current_room + "&mode=" + current_interval+ "&offset=" + current_offset;
+  }
+  var data = get_data(url);
+  var lines = data.split('\n');
+  var array_temperature;
+  if (threshold == null || threshold == "" || threshold == "\n") {
+    array_temperature = [['time', room_hash[current_room]]];
+    threshold = null;
+  } else {
+    array_temperature = [['time', room_hash[current_room], 'warning level']];
+  }
+  var array_humidity = [['time', room_hash[current_room]]];
+  current_length = lines.length;
+  for (var i = 0; i < lines.length; ++i) {
+    var line = lines[i];
+    if (!line) continue;
+    var items = line.split(',');
+    var tp = parseFloat(items[1]);
+    if (threshold == null) {
+      array_temperature.splice(1, 0, [items[0],tp]);
+    } else {
+      var wl = (tp < (threshold[0] + threshold[1])/2.0)?threshold[0]:threshold[1];
+      array_temperature.splice(1, 0, [items[0],tp,wl]);
+    }
+    array_humidity.splice(1, 0, [items[0],parseFloat(items[2])]);
+  }
+
+  var option_temperature = {
+    title: 'Temperature sensor measurement'
+  };
+  var option_humidity = {
+    title: 'Humidity sensor measurement',
+    vAxis: {'minValue': 30, 'maxValue': 100}
+  };
+
+  var chart_temperature = new google.visualization.LineChart(document.getElementById('temperature_div'));
+  var chart_humidity = new google.visualization.LineChart(document.getElementById('humidity_div'));
+
+  var table_temperature = google.visualization.arrayToDataTable(array_temperature);
+  var table_humidity = google.visualization.arrayToDataTable(array_humidity);
+  chart_temperature.draw(table_temperature, option_temperature);
+  chart_humidity.draw(table_humidity, option_humidity);
+}
+
+function room_name(url) {
+  var data = get_data(url);
+  if (!data) return;
+  var lines = data.split('\n');
+  for (var i = 0; i < lines.length; ++i) {
+    var line = lines[i];
+    if (!line) continue;
+    var items = line.split(',');
+    room_hash[items[0]] = items[1];
+  }
+}
+
+function get_data(url) {
+  var xml = new XMLHttpRequest();
+  xml.open("GET", url + "&ct=" + Date.now(), false);
+  xml.send(null);
+  return xml.responseText;
+}
+
+function update_room() {
+  var s = document.getElementById('room');
+  for (var key in room_hash) {
+    var op = document.createElement('option');
+    op.setAttribute('value', key);
+    // temporarilly
+    if (key == '60') {
+      op.setAttribute('selected', 'true');
+    }
+    op.innerHTML = room_hash[key];
+    s.appendChild(op);
+  }
+  update_sensor_status(current_room);
+  update_uptime(current_room);
+}
+
+function update_sensor_status(key) {
+  var data = get_data('http://' + hostname + '/retrievedb.php?type=STATUS&room=' + key);
+  var lines = data.split('\n');
+  var line = lines[0];
+  var items = line.split(',');
+  var td = document.getElementById('sensor_status');
+  var caption = "";
+  if (items[1] == "0") {
+    caption = " (no warning)";
+    td.style.color = "blue";
+  } else {
+    caption = " (warning)";
+    td.style.color = "red";
+  }
+  td.innerHTML = items[1] + caption;
+}
+
+function update_uptime(key) {
+  var data = get_data('http://' + hostname + '/retrievedb.php?type=UPTIME&room=' + key);
+  var td = document.getElementById('uptime');
+  td.innerHTML = data;
+}
+
+function load_threshold(key) {
+  var data = get_data('http://' + hostname + '/retrievedb.php?type=THRESHOLD&room=' + key);
+  if (!data || data == "" || data == "\n") return null;
+  var th = data.split(',');
+  var td = new Array(th.length);
+  for (var i = 0; i < th.length; ++i) {
+    td[i] = parseFloat(th[i]);
+  }
+  return td;
+}
+
+function change_room() {
+  var s = document.getElementById('room');
+  var value = getSelectedOption(s);
+  if (value) {
+    current_room = value;
+    update_sensor_status(current_room);
+    update_uptime(current_room);
+    drawChart(current_offset);
+  }
+}
+
+function change_interval() {
+  var s = document.getElementById('interval');
+  var value = getSelectedOption(s);
+  if (value) {
+    current_interval = value;
+    update_sensor_status(current_room);
+    update_uptime(current_room);
+    drawChart(current_offset);
+  }
+}
+
+function getSelectedOption(s) {
+  for (var i = 0; i < s.options.length; ++i) {
+    var op = s.options[i];
+    if (op.selected) {
+      return op.value;
+    }
+  }
+  return null;
+}
+
+function drawDeltaPage(delta) {
+  if (delta > 0) {
+    current_offset += current_length;
+  }
+  if (delta == 0) {
+    current_offset = 0;
+  }
+  if (delta < 0) {
+    switch (current_interval) {
+    case "minute":
+      current_offset -= 60;
+      break;
+    case "hour":
+      current_offset -= 24;
+      break;
+    case "day":
+      current_offset -= 60;
+      break;
+    }
+    if (current_offset < 0) current_offset = 0;
+  }
+  change_interval();
+}
+
+</script>
+</head>
+<body onLoad="update_room()">
+<h1 style="color: #98b625; text-align: center;">minosys-HEMS: Sensor tracks</h1><hr />
+<table style="margin:0 auto 0 auto;">
+<tr><td>
+Select sensor: <select id="room" onChange="change_room()">
+</select></td>
+<td>
+Interval: <select id="interval" onChange="change_interval()">
+<option value="minute">minute</option>
+<option value="hour">hour</option>
+<option value="day">day</option>
+</select>
+</td>
+<td>Current Sensor Status:</td>
+<td id="sensor_status"></td>
+<td>Uptime:</td>
+<td id="uptime"></td>
+</tr>
+<tr>
+<td colspan='6'>
+<form name='startday'>Year:<input type="text" size="2" id="year" name="year" max="4" />
+Month:<input type="text" id="month" size="2" name="month" max="2" />
+Day:<input type="text" id="day" size="2" name="day" max="2" />
+Hour:<input type="text" id="hour" size="2" name="hour" max="2" />
+Minutes:<input type="text" id="minutes" size="2" name="minutes" max="2" />
+<button type="button" onclick="drawDeltaPage(1)">Before</button>
+<button type="button" onclick="drawDeltaPage(-1)">After</button>
+<button type="button" onclick="drawDeltaPage(0)">Current/Set Date</button>
+</form>
+</tr>
+</table>
+<div id="temperature_div" style="margin: 0 auto 0 auto; width: 900px; height: 500px;"></div>
+<div id="humidity_div" style="margin: 0 auto 0 auto; width:900px; height: 500px;"></div>
+</body>
+</html>

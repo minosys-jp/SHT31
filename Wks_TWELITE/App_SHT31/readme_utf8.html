@@ -1,0 +1,23 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+</head>
+
+<body>
+<h1>SHT31 ドライバ powered by TWE Lite DIP 用標準アプリケーション TweLite</h1>
+<h2>概要</h2>
+<p>本アプリケーションは ToCoNet ライブラリを用いて作成されています。</p>
+<p>TWE Lite DIP 標準アプリケーションから SHT31 ドライバを派生させています。</p>
+<p>廃止された機能: 1秒間欠モード、子機受信モード、ADC/PWM</p>
+<p>暗電流を流さないようになるべく工夫していますが、まだどこかおかしいようです。</p>
+<p>（単４電池が2日でなくなった）</p>
+<p>オプションビットは 0x800836 に設定して下さい。</p>
+<p>本バージョンでは、論理デバイスIDと部屋番号は同一として下さい。Rasapberry Pi の新 proxy
+  は部屋番号を送信します。従って、部屋番号は 1〜0x6f の間となります。</p>
+  
+<h2>ソースコード構成</h2>
+<pre>
+  Common/Source   : 各処理コード
+</pre>
+
+</body>
